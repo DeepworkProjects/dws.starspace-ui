@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,15 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { theme } from '../styles/theme';
 import api from '../services/api';
+// Import Google Sign-In only for native platforms
+let GoogleSignin: any = null;
+let statusCodes: any = null;
+
+if (Platform.OS !== 'web') {
+  const GoogleSignInModule = require('@react-native-google-signin/google-signin');
+  GoogleSignin = GoogleSignInModule.GoogleSignin;
+  statusCodes = GoogleSignInModule.statusCodes;
+}
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -24,6 +33,16 @@ export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Configure Google Sign-In for native platforms
+    if (Platform.OS !== 'web' && GoogleSignin) {
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+        offlineAccess: true,
+      });
+    }
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -50,8 +69,62 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   const handleGoogleLogin = async () => {
-    // For MVP, we'll simulate Google login
-    Alert.alert('Google Login', 'Google login will be implemented with proper OAuth setup');
+    if (Platform.OS === 'web') {
+      // For web, we'll use a simple demo flow
+      Alert.alert(
+        'Google Sign-In',
+        'For web platform, Google Sign-In requires additional setup with OAuth redirect URLs. For now, please use email/password login.',
+        [
+          {
+            text: 'Use Demo Account',
+            onPress: async () => {
+              setEmail('test@starspace.com');
+              setPassword('testpassword123');
+              Alert.alert('Demo Account', 'Demo credentials filled. Click Sign In to continue.');
+            }
+          },
+          { text: 'OK' }
+        ]
+      );
+      return;
+    }
+
+    // Native Google Sign-In
+    try {
+      setLoading(true);
+      
+      // Check if Google Play Services are available (for Android)
+      await GoogleSignin.hasPlayServices();
+      
+      // Sign in with Google
+      const userInfo = await GoogleSignin.signIn();
+      
+      // Send the Google ID token to our backend
+      const response = await api.googleAuth({
+        email: userInfo.user.email,
+        googleId: userInfo.user.id,
+        name: userInfo.user.name,
+        photo: userInfo.user.photo,
+        idToken: userInfo.idToken,
+      });
+      
+      if (response.access_token) {
+        await api.setToken(response.access_token);
+        navigation.replace('Dashboard');
+      }
+    } catch (error: any) {
+      setLoading(false);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled the login flow
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        // Operation is in progress already
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Google Play Services not available');
+      } else {
+        Alert.alert('Error', 'Failed to sign in with Google');
+        console.error('Google Sign-In error:', error);
+      }
+    }
   };
 
   return (
