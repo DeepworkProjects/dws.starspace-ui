@@ -13,6 +13,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { theme } from '../styles/theme';
 import api from '../services/api';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+
 // Import Google Sign-In only for native platforms
 let GoogleSignin: any = null;
 let statusCodes: any = null;
@@ -22,6 +26,9 @@ if (Platform.OS !== 'web') {
   GoogleSignin = GoogleSignInModule.GoogleSignin;
   statusCodes = GoogleSignInModule.statusCodes;
 }
+
+// Dismiss web browser for OAuth
+WebBrowser.maybeCompleteAuthSession();
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -35,6 +42,15 @@ export default function LoginScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
+  // Google OAuth setup for web
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    redirectUri: makeRedirectUri({
+      scheme: 'com.starspace.app',
+      path: 'redirect'
+    }),
+  });
+
   useEffect(() => {
     // Configure Google Sign-In for native platforms
     if (Platform.OS !== 'web' && GoogleSignin) {
@@ -44,6 +60,62 @@ export default function LoginScreen({ navigation }: Props) {
       });
     }
   }, []);
+
+  // Handle Google OAuth response for web
+  useEffect(() => {
+    if (Platform.OS === 'web' && response?.type === 'success') {
+      const { authentication } = response;
+      handleWebGoogleAuth(authentication);
+    }
+  }, [response]);
+
+  const handleWebGoogleAuth = async (authentication: any) => {
+    if (!authentication?.accessToken) return;
+
+    setLoading(true);
+    try {
+      // Get user info from Google
+      const userInfoResponse = await fetch(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        {
+          headers: { Authorization: `Bearer ${authentication.accessToken}` },
+        }
+      );
+      const userInfo = await userInfoResponse.json();
+
+      // Send to our backend
+      const authResponse = await api.googleAuth({
+        email: userInfo.email,
+        googleId: userInfo.id,
+        name: userInfo.name,
+        photo: userInfo.picture,
+        accessToken: authentication.accessToken,
+      });
+
+      if (authResponse.access_token) {
+        await api.setToken(authResponse.access_token);
+        
+        // Check if user has profile
+        try {
+          const profile = await api.getProfile();
+          if (profile) {
+            navigation.replace('Dashboard');
+          } else {
+            navigation.replace('ProfileSetup');
+          }
+        } catch (error) {
+          // No profile yet
+          navigation.replace('ProfileSetup');
+        }
+      }
+    } catch (error) {
+      console.error('Google auth error:', error);
+      setMessage('Failed to sign in with Google. Please try again.');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -71,13 +143,13 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleGoogleLogin = async () => {
     if (Platform.OS === 'web') {
-      // For web, auto-fill demo credentials
-      setEmail('test@starspace.com');
-      setPassword('testpassword123');
-      setMessage('Demo credentials filled. Click Sign In to continue.');
-      
-      // Clear message after 3 seconds
-      setTimeout(() => setMessage(''), 3000);
+      // Use expo-auth-session for web
+      if (!request) {
+        setMessage('Google Sign-In is being configured...');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+      promptAsync();
       return;
     }
 
