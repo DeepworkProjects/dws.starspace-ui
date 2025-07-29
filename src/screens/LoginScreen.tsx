@@ -45,10 +45,12 @@ export default function LoginScreen({ navigation }: Props) {
   // Google OAuth setup for web
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    redirectUri: makeRedirectUri({
-      scheme: 'com.starspace.app',
-      path: 'redirect'
-    }),
+    redirectUri: Platform.OS === 'web' 
+      ? makeRedirectUri({ path: 'redirect' })  // Generates http://localhost:8081/redirect
+      : makeRedirectUri({ 
+          scheme: 'com.starspace.app',
+          path: 'redirect'
+        }),
   });
 
   useEffect(() => {

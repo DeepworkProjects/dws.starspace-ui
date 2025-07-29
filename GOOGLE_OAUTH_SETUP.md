@@ -14,12 +14,11 @@ To complete the Google OAuth setup for web, you need to configure the authorized
 
 5. Under **Authorized JavaScript origins**, add:
    - `http://localhost:8081`
-   - `http://localhost:19006` (if using Expo web on different port)
 
 6. Under **Authorized redirect URIs**, add:
-   - `http://localhost:8081`
    - `http://localhost:8081/redirect`
-   - `com.starspace.app://redirect` (for native apps)
+   
+   Note: The redirect URI must match exactly. For web development, expo-auth-session generates `http://localhost:8081/redirect`
 
 7. Save the changes
 
