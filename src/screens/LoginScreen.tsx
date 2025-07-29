@@ -33,6 +33,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     // Configure Google Sign-In for native platforms
@@ -70,22 +71,13 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleGoogleLogin = async () => {
     if (Platform.OS === 'web') {
-      // For web, we'll use a simple demo flow
-      Alert.alert(
-        'Google Sign-In',
-        'For web platform, Google Sign-In requires additional setup with OAuth redirect URLs. For now, please use email/password login.',
-        [
-          {
-            text: 'Use Demo Account',
-            onPress: async () => {
-              setEmail('test@starspace.com');
-              setPassword('testpassword123');
-              Alert.alert('Demo Account', 'Demo credentials filled. Click Sign In to continue.');
-            }
-          },
-          { text: 'OK' }
-        ]
-      );
+      // For web, auto-fill demo credentials
+      setEmail('test@starspace.com');
+      setPassword('testpassword123');
+      setMessage('Demo credentials filled. Click Sign In to continue.');
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setMessage(''), 3000);
       return;
     }
 
@@ -167,9 +159,14 @@ export default function LoginScreen({ navigation }: Props) {
           <TouchableOpacity
             style={[styles.button, styles.googleButton]}
             onPress={handleGoogleLogin}
+            disabled={loading}
           >
             <Text style={styles.googleButtonText}>Continue with Google</Text>
           </TouchableOpacity>
+
+          {message ? (
+            <Text style={styles.message}>{message}</Text>
+          ) : null}
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
@@ -256,5 +253,12 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  message: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
+    fontStyle: 'italic',
   },
 });
